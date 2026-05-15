@@ -1,6 +1,8 @@
-# TechMart — New Relic Full-Stack Demo on Minikube
+# TechMart — New Relic Full-Stack Demo
 
-A fully instrumented e-commerce demo application running on Minikube, designed to showcase **New Relic's complete observability platform** — from browser UX to Kubernetes infrastructure, across a realistic polyglot microservices architecture.
+A fully instrumented e-commerce demo application designed to showcase **New Relic's complete observability platform** — from browser UX to Kubernetes infrastructure, across a realistic polyglot microservices architecture.
+
+Runs on **Minikube** or **Rancher Desktop** on macOS (Apple Silicon).
 
 ---
 
@@ -64,18 +66,24 @@ Browser (NR Browser Agent)
 
 ## Prerequisites
 
-- macOS with Apple Silicon (M1/M2/M3) — ARM64
+**All setups require:**
+- macOS with Apple Silicon (M1/M2/M3)
+- [Helm](https://helm.sh/docs/intro/install/) — `brew install helm`
+- A New Relic account — [free tier available](https://newrelic.com/signup)
+
+**Minikube setup additionally requires:**
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) or [OrbStack](https://orbstack.dev/)
 - [Minikube](https://minikube.sigs.k8s.io/docs/start/) — `brew install minikube`
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) — `brew install kubectl`
-- [Helm](https://helm.sh/docs/intro/install/) — `brew install helm`
-- A New Relic account — [free tier available](https://newrelic.com/signup)
+
+**Rancher Desktop setup additionally requires:**
+- [Rancher Desktop](https://rancherdesktop.io) — includes kubectl, nerdctl, and Kubernetes (k3s)
 
 ---
 
 ## Quick Start
 
-### 1. Configure environment
+### Step 1 — Configure environment
 
 ```bash
 cp .env.example .env
@@ -84,37 +92,84 @@ cp .env.example .env
 
 Required:
 - `NEW_RELIC_LICENSE_KEY` — NR Account → API Keys → License Key
-- `JWT_SECRET` — any long random string (32+ chars)
+- `JWT_SECRET` — any random string, 32+ characters
 
 Optional (for AI chatbot):
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY`
 
-### 2. (Optional) Add NR Browser Agent snippet
+### Step 2 — (Optional) Add NR Browser Agent snippet
 
-In New Relic: **Add Data → Browser → Copy/paste JS snippet**
+In New Relic UI: **Add Data → Browser → Copy/paste JS snippet**
 
 ```bash
 # Add to .env:
-NR_BROWSER_AGENT='<script type="text/javascript">...(paste full snippet)...</script>'
+NR_BROWSER_AGENT='<script type="text/javascript">...(paste full snippet here)...</script>'
 ```
 
-### 3. Deploy everything
+### Step 3 — Deploy
+
+Choose your local Kubernetes platform:
+
+---
+
+#### Option A: Minikube
 
 ```bash
 bash scripts/setup.sh
 ```
 
-First run takes ~10 minutes (builds all 8 Docker images inside Minikube).
+Starts a dedicated `nr-demo` Minikube profile (6 CPUs, 12 GB RAM), builds all images inside Minikube's Docker daemon, and deploys everything.
 
-### 4. Open the app
+First run takes ~10 minutes.
 
+**Access the app:**
 ```bash
 bash scripts/port-forward.sh
-# Opens http://localhost:3000
+# Then open http://localhost:3000
 ```
 
+---
+
+#### Option B: Rancher Desktop
+
+**Before running the script**, configure Rancher Desktop:
+
+1. Open **Rancher Desktop → Preferences → Virtual Machine**
+   - Set CPU: **6+** cores
+   - Set Memory: **12+ GB**
+2. Under **Container Engine**, choose one of:
+   - **dockerd (Moby)** — recommended, works like standard Docker
+   - **containerd** — the script auto-detects and uses `nerdctl` instead
+3. Ensure **Kubernetes** is enabled (default: on)
+
+```bash
+bash scripts/setup-rancher.sh
+```
+
+The script auto-detects your container runtime and builds images accordingly.
+
+**Access the app — two options:**
+
+| Method | URL |
+|--------|-----|
+| NodePort (no extra step) | http://localhost:30300 |
+| Port-forward (clean URLs) | `bash scripts/port-forward.sh` → http://localhost:3000 |
+
+> **Note:** Rancher Desktop exposes NodePort services directly on `localhost`, so `http://localhost:30300` works immediately after deployment without any additional commands.
+
 **Demo credentials:** `demo@nrdemo.com` / `admin123`
+
+---
+
+### Rancher Desktop — Runtime Comparison
+
+| | dockerd (Moby) | containerd (nerdctl) |
+|---|---|---|
+| Image build | `docker build` | `nerdctl build --namespace k8s.io` |
+| Familiar CLI | ✅ Standard Docker | ⚠ nerdctl (mostly compatible) |
+| Script support | ✅ Auto-detected | ✅ Auto-detected |
+| Recommendation | ✅ Easier | For advanced users |
 
 ---
 
@@ -122,35 +177,46 @@ bash scripts/port-forward.sh
 
 ### Distributed Trace
 1. Login → browse → add to cart → checkout
-2. Checkout creates a cross-language trace: `api-gateway (Node) → order-service (Java) → product-service (Java) → user-service (Python)`
+2. Checkout creates a cross-language trace spanning 4 services and 3 languages
 3. In NR: **APM → Distributed Tracing**
 
 ### Error Injection
 1. Go to `/admin` → click **"Trigger NPE → Product Service"**
-2. In NR: **APM → product-service → Errors** — full Java stack trace
+2. In NR: **APM → product-service → Errors** — full Java stack trace with logs
 
 ### Latency Injection
 1. `/admin` → enable **Latency Injection** (e.g., 3000ms) → **Apply**
-2. Browse products — Apdex drops, slow traces appear
-3. In NR: **APM → product-service → Transactions**
+2. Browse products — Apdex drops, slow traces appear in NR
+3. Restore: click **"Reset All"**
 
 ### AI Monitoring
-1. Click 💬 (bottom right) → ask a product question
-2. Switch between Claude and Gemini providers
-3. In NR: **AI Monitoring** — token counts, latency, prompts, completions
+1. Click 💬 (bottom right corner) → ask a product question
+2. Toggle between **Claude** and **Gemini** using the provider buttons
+3. In NR: **AI Monitoring** — token counts, latency, prompts, completions per model
 
 ### Load Test
 ```bash
 bash scripts/load-test.sh
-# Sends ~5 req/s for 2 minutes to populate NR dashboards
+# Generates ~5 req/s for 2 minutes to populate NR dashboards
 ```
 
 ---
 
 ## Teardown
 
+**Minikube:**
 ```bash
 bash scripts/teardown.sh
+# Deletes the nr-demo Minikube profile entirely
+```
+
+**Rancher Desktop:**
+```bash
+kubectl delete namespace nr-demo
+helm uninstall newrelic-bundle -n newrelic
+# Images remain in the local registry — remove manually if needed:
+# docker rmi $(docker images 'nr-demo/*' -q)   # dockerd
+# nerdctl -n k8s.io rmi $(nerdctl -n k8s.io images 'nr-demo/*' -q)  # containerd
 ```
 
 ---
@@ -171,5 +237,10 @@ MiniKubeNRDemo/
 │   └── admin-service/     # Chaos injection panel (Python, NR Python Agent)
 ├── k8s/                   # Kubernetes manifests for all services
 ├── db/init/               # PostgreSQL schema + 20 seed products
-└── scripts/               # setup.sh, teardown.sh, port-forward.sh, load-test.sh
+└── scripts/
+    ├── setup.sh            # Minikube deploy
+    ├── setup-rancher.sh    # Rancher Desktop deploy (auto-detects docker/nerdctl)
+    ├── port-forward.sh     # Expose app at localhost:3000
+    ├── load-test.sh        # Traffic generator for NR dashboards
+    └── teardown.sh         # Minikube teardown
 ```
