@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: nr-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: product-service }
+  template:
+    metadata:
+      labels: { app: product-service }
+    spec:
+      containers:
+        - name: product-service
+          image: nr-demo/product-service:latest
+          imagePullPolicy: Never
+          ports: [{ containerPort: 8080 }]
+          envFrom:
+            - configMapRef: { name: nr-demo-config }
+          env:
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom: { secretKeyRef: { name: nr-demo-secrets, key: NEW_RELIC_LICENSE_KEY } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: nr-demo-secrets, key: POSTGRES_PASSWORD } }
+          readinessProbe:
+            httpGet: { path: /health, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests: { memory: "256Mi", cpu: "100m" }
+            limits:   { memory: "768Mi", cpu: "1000m" }

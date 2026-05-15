@@ -1,0 +1,27 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:5432/${POSTGRES_DB:nrdemo}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:nrdemo_password_123}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  application:
+    name: order-service
+
+product-service:
+  url: ${PRODUCT_SERVICE_URL:http://product-service:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
