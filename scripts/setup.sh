@@ -127,18 +127,29 @@ done
 success "All manifests applied"
 
 # ─── 10. Wait for all deployments ────────────────────────────────
-info "Waiting for all deployments (may take 2-3 minutes for Java services)..."
-for svc in frontend api-gateway user-service product-service cart-service order-service ai-chat-service admin-service; do
-  kubectl rollout status "deployment/$svc" -n nr-demo --timeout=300s && \
+info "Waiting for fast services (Node.js/Python)..."
+for svc in frontend api-gateway cart-service user-service admin-service ai-chat-service; do
+  kubectl rollout status "deployment/$svc" -n nr-demo --timeout=180s && \
+    success "  $svc ready" || warn "  $svc not ready yet (check: kubectl logs -n nr-demo deploy/$svc)"
+done
+
+info "Waiting for Java services (allow up to 5 minutes on constrained hardware)..."
+for svc in product-service order-service; do
+  kubectl rollout status "deployment/$svc" -n nr-demo --timeout=600s && \
     success "  $svc ready" || warn "  $svc not ready yet (check: kubectl logs -n nr-demo deploy/$svc)"
 done
 
 # ─── 11. Install New Relic Kubernetes integration ────────────────
 info "Installing New Relic Kubernetes integration via Helm..."
-helm repo add newrelic https://helm-charts.newrelic.com 2>/dev/null || true
-helm repo update
 
-helm upgrade --install newrelic-bundle newrelic/nri-bundle \
+if ! helm repo list 2>/dev/null | grep -q "^newrelic"; then
+  helm repo add newrelic https://helm-charts.newrelic.com \
+    || warn "Could not add NR helm repo — check network. Skipping K8s integration."
+fi
+
+if helm repo list 2>/dev/null | grep -q "^newrelic"; then
+  helm repo update
+  helm upgrade --install newrelic-bundle newrelic/nri-bundle \
   --namespace newrelic \
   --create-namespace \
   --set global.licenseKey="$NEW_RELIC_LICENSE_KEY" \
@@ -150,7 +161,11 @@ helm upgrade --install newrelic-bundle newrelic/nri-bundle \
   --set kube-state-metrics.enabled=true \
   --set global.lowDataMode=true \
   2>&1 | tail -5
-success "New Relic K8s integration installed"
+  success "New Relic K8s integration installed"
+else
+  warn "Skipping NR K8s integration — add repo manually and re-run:"
+  warn "  helm repo add newrelic https://helm-charts.newrelic.com && helm repo update"
+fi
 
 # ─── 12. Print access information ────────────────────────────────
 MINIKUBE_IP=$(minikube ip --profile=nr-demo)
