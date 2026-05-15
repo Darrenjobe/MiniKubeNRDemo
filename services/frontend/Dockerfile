@@ -9,7 +9,7 @@ RUN npm run build
 # Stage 2: serve with Express (injects NR Browser snippet at runtime)
 FROM node:20-alpine
 WORKDIR /app
-RUN npm install express
+RUN npm install express@4
 COPY --from=build /app/dist ./dist
 COPY server ./server
 EXPOSE 3000

@@ -1,5 +1,5 @@
 import newrelic.agent
-newrelic.agent.initialize('newrelic.ini')
+# newrelic-admin run-program initializes the agent before module import.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
