@@ -3,10 +3,12 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DIST = path.join(__dirname, '..', 'dist');
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://api-gateway:4000';
 
 // New Relic Browser agent snippet — set via NR_BROWSER_AGENT env var
 const nrSnippet = process.env.NR_BROWSER_AGENT || '';
@@ -21,6 +23,18 @@ try {
   indexHtml = '<html><body><h1>Build not found. Run npm run build.</h1></body></html>';
 }
 
+// Proxy /api/* to the API gateway — must come before static and SPA fallback
+app.use('/api', createProxyMiddleware({
+  target: API_GATEWAY_URL,
+  changeOrigin: true,
+  on: {
+    error: (err, req, res) => {
+      console.error('Proxy error:', err.message);
+      res.status(502).json({ error: 'API gateway unavailable' });
+    },
+  },
+}));
+
 // Serve all static assets normally
 app.use(express.static(DIST, { index: false }));
 
@@ -32,4 +46,4 @@ app.use((req, res) => {
   res.send(indexHtml);
 });
 
-app.listen(PORT, () => console.log(`Frontend serving on port ${PORT}`));
+app.listen(PORT, () => console.log(`Frontend serving on port ${PORT} → API gateway: ${API_GATEWAY_URL}`));
