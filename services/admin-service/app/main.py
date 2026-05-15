@@ -1,5 +1,7 @@
 import newrelic.agent
-newrelic.agent.initialize('newrelic.ini')
+# newrelic-admin run-program (the CMD entrypoint) initializes the agent
+# automatically before this module is imported — calling initialize() again
+# with a different source triggers ConfigurationError, so we omit it here.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

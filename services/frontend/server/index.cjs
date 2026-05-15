@@ -24,8 +24,10 @@ try {
 // Serve all static assets normally
 app.use(express.static(DIST, { index: false }));
 
-// All routes return the patched index.html (SPA)
-app.get('*', (req, res) => {
+// All unmatched routes return index.html (SPA fallback).
+// Uses app.use() rather than app.get('*') to avoid breaking under Express 5
+// which no longer accepts a bare * wildcard in path-to-regexp v8.
+app.use((req, res) => {
   res.setHeader('Content-Type', 'text/html');
   res.send(indexHtml);
 });
