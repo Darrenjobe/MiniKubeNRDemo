@@ -32,11 +32,28 @@ for tool in minikube kubectl docker helm; do
 done
 success "All prerequisites found"
 
-# ─── 3. Start Minikube ───────────────────────────────────────────
-info "Starting Minikube (CPUs=6, Memory=12g, Driver=docker)..."
+# ─── 3. Detect available resources ──────────────────────────────
+if [[ "$(uname)" == "Darwin" ]]; then
+  TOTAL_CPUS=$(sysctl -n hw.logicalcpu)
+  TOTAL_MEM_GB=$(( $(sysctl -n hw.memsize) / 1024 / 1024 / 1024 ))
+else
+  TOTAL_CPUS=$(nproc)
+  TOTAL_MEM_GB=$(( $(grep MemTotal /proc/meminfo | awk '{print $2}') / 1024 / 1024 ))
+fi
+
+# Leave at least 2 CPUs and 4 GB for the host OS
+MINIKUBE_CPUS=$(( TOTAL_CPUS > 3 ? TOTAL_CPUS - 2 : TOTAL_CPUS ))
+MINIKUBE_MEM_GB=$(( TOTAL_MEM_GB > 6 ? TOTAL_MEM_GB - 4 : TOTAL_MEM_GB ))
+MINIKUBE_MEM="${MINIKUBE_MEM_GB}g"
+
+info "Host resources: ${TOTAL_CPUS} CPUs, ${TOTAL_MEM_GB}GB RAM"
+info "Allocating to Minikube: ${MINIKUBE_CPUS} CPUs, ${MINIKUBE_MEM} RAM"
+
+# ─── 4. Start Minikube ───────────────────────────────────────────
+info "Starting Minikube (CPUs=${MINIKUBE_CPUS}, Memory=${MINIKUBE_MEM}, Driver=docker)..."
 minikube start \
-  --cpus=6 \
-  --memory=12g \
+  --cpus="${MINIKUBE_CPUS}" \
+  --memory="${MINIKUBE_MEM}" \
   --driver=docker \
   --container-runtime=containerd \
   --kubernetes-version=stable \
@@ -47,7 +64,7 @@ minikube profile nr-demo
 eval "$(minikube docker-env --profile=nr-demo)"
 success "Minikube running"
 
-# ─── 4. Build Docker images inside Minikube ──────────────────────
+# ─── 5. Build Docker images inside Minikube ──────────────────────
 SERVICES=(frontend api-gateway user-service product-service cart-service order-service ai-chat-service admin-service)
 
 info "Building Docker images (this takes 5-10 minutes on first run)..."
@@ -60,7 +77,7 @@ for svc in "${SERVICES[@]}"; do
   success "  Built nr-demo/$svc"
 done
 
-# ─── 5. Create Kubernetes namespace & ConfigMaps ─────────────────
+# ─── 6. Create Kubernetes namespace & ConfigMaps ─────────────────
 info "Applying namespace..."
 kubectl apply -f "$ROOT/k8s/namespace.yaml"
 
@@ -74,7 +91,7 @@ kubectl create configmap postgres-init \
 info "Applying ConfigMap..."
 kubectl apply -f "$ROOT/k8s/configmap.yaml"
 
-# ─── 6. Create Secrets ───────────────────────────────────────────
+# ─── 7. Create Secrets ───────────────────────────────────────────
 info "Creating Kubernetes secrets from .env..."
 kubectl create secret generic nr-demo-secrets \
   --namespace=nr-demo \
@@ -87,7 +104,7 @@ kubectl create secret generic nr-demo-secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 success "Secrets created"
 
-# ─── 7. Deploy infrastructure ────────────────────────────────────
+# ─── 8. Deploy infrastructure ────────────────────────────────────
 info "Deploying PostgreSQL..."
 kubectl apply -f "$ROOT/k8s/postgres/pvc.yaml"
 kubectl apply -f "$ROOT/k8s/postgres/deployment.yaml"
@@ -101,7 +118,7 @@ info "Waiting for PostgreSQL to be ready..."
 kubectl rollout status deployment/postgres -n nr-demo --timeout=120s
 success "PostgreSQL ready"
 
-# ─── 8. Deploy all application services ──────────────────────────
+# ─── 9. Deploy all application services ──────────────────────────
 info "Deploying application services..."
 for dir in api-gateway user-service product-service cart-service order-service ai-chat-service admin-service frontend; do
   kubectl apply -f "$ROOT/k8s/$dir/deployment.yaml"
@@ -109,14 +126,14 @@ for dir in api-gateway user-service product-service cart-service order-service a
 done
 success "All manifests applied"
 
-# ─── 9. Wait for all deployments ─────────────────────────────────
+# ─── 10. Wait for all deployments ────────────────────────────────
 info "Waiting for all deployments (may take 2-3 minutes for Java services)..."
 for svc in frontend api-gateway user-service product-service cart-service order-service ai-chat-service admin-service; do
   kubectl rollout status "deployment/$svc" -n nr-demo --timeout=300s && \
     success "  $svc ready" || warn "  $svc not ready yet (check: kubectl logs -n nr-demo deploy/$svc)"
 done
 
-# ─── 10. Install New Relic Kubernetes integration ─────────────────
+# ─── 11. Install New Relic Kubernetes integration ────────────────
 info "Installing New Relic Kubernetes integration via Helm..."
 helm repo add newrelic https://helm-charts.newrelic.com 2>/dev/null || true
 helm repo update
@@ -135,7 +152,7 @@ helm upgrade --install newrelic-bundle newrelic/nri-bundle \
   2>&1 | tail -5
 success "New Relic K8s integration installed"
 
-# ─── 11. Print access information ────────────────────────────────
+# ─── 12. Print access information ────────────────────────────────
 MINIKUBE_IP=$(minikube ip --profile=nr-demo)
 echo ""
 echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
