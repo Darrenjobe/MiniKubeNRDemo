@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: nr-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: api-gateway }
+  template:
+    metadata:
+      labels: { app: api-gateway }
+    spec:
+      containers:
+        - name: api-gateway
+          image: nr-demo/api-gateway:latest
+          imagePullPolicy: Never
+          ports: [{ containerPort: 4000 }]
+          envFrom:
+            - configMapRef: { name: nr-demo-config }
+          env:
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom: { secretKeyRef: { name: nr-demo-secrets, key: NEW_RELIC_LICENSE_KEY } }
+            - name: NEW_RELIC_APP_NAME
+              value: "NR-Demo-API-Gateway"
+          readinessProbe:
+            httpGet: { path: /health, port: 4000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { memory: "128Mi", cpu: "50m" }
+            limits:   { memory: "256Mi", cpu: "500m" }

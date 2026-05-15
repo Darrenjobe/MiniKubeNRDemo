@@ -1,0 +1,18 @@
+common: &default_settings
+  license_key: '<%= ENV["NEW_RELIC_LICENSE_KEY"] %>'
+  app_name: NR-Demo-Product-Service
+  log_level: info
+  distributed_tracing:
+    enabled: true
+  application_logging:
+    enabled: true
+    forwarding:
+      enabled: true
+    local_decorating:
+      enabled: true
+
+development:
+  <<: *default_settings
+
+production:
+  <<: *default_settings
